@@ -1,0 +1,12 @@
+INSTALL
+=======
+gem install chronic chronic_duration term-ansicolor
+
+USAGE
+=====
+todo help
+
+LICENSE
+=======
+All code in this package is provided under the LGPL license.
+Please read the file COPYING.

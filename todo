@@ -1,0 +1,413 @@
+#!/usr/bin/env ruby
+# All code in this package is provided under the LGPL license.
+# Please read the file COPYING.
+require 'yaml'
+require 'rubygems'
+require 'chronic'
+require 'chronic_duration'
+require 'term/ansicolor'
+include Term::ANSIColor
+
+### internal init
+COLS   = begin #{{{
+  require 'io/console'
+  IO.console.winsize[1]
+rescue LoadError
+  Integer(`tput cols`)
+end #}}}
+EDITOR = if ENV['EDITOR'] #{{{
+  ENV['EDITOR']
+else  
+  '/etc/alternatives/editor'
+end #}}}
+
+### ~/.todorc #{{{
+$opts = {}
+$opts['PATH'] = '~/.todos'
+$opts['ICOL'] = 'red'
+$opts['OCOL'] = 'on_white'
+$opts['TFOR'] = '%m.%y,%H:%M'
+
+if File.exists?(File.expand_path('~/.todorc'))
+  $opts = YAML.load_file(File.expand_path('~/.todorc'))
+else
+  File.open(File.expand_path('~/.todorc'),'w') { |f| f.write $opts.to_yaml }
+end #}}}
+
+### chdir to path #{{{
+unless File.exists?(File.expand_path($opts['PATH']))
+  Dir.mkdir(File.expand_path($opts['PATH']))
+end
+Dir.chdir(File.expand_path($opts['PATH'])) #}}}
+
+### extend chronicduration return chronicstring stripped #{{{
+module ChronicDuration
+  def rest(string)
+    res = []
+    string.split(' ').each do |word|
+      orig = word.dup
+      word.downcase!
+      next if word =~ float_matcher
+      stripped_word = word.strip.gsub(/^,/, '').gsub(/,$/, '')
+      if mappings.has_key?(stripped_word) 
+      elsif !join_words.include?(stripped_word) and ChronicDuration.raise_exceptions
+        raise DurationParseError, "An invalid word #{word.inspect} was used in the string to be parsed."
+      else  
+        res << orig
+      end
+    end
+    res.join(' ')
+  end
+end   #}}}
+
+module Todo
+class TodoItem #{{{
+  attr_reader :work
+  attr_accessor :id,:description,:priority,:project,:done
+
+  def initialize(id,description,priority=false,project=nil,work=[],done=nil)
+    @id = id
+    @description = description
+    @priority = priority
+    @project = project
+    @work = work
+    @done = done
+  end
+end #}}} 
+
+  def self.number_range_parse(numstr) #{{{
+    list = []
+    numstr.to_s.scan(/(\d+)((\s*-\s*|\s*\.\.\s*)(\d+))?/) do |e|
+      if e[3].nil?
+        list << e[0] 
+      else
+        list += Range.new(e[0],e[3]).to_a
+      end  
+    end
+    list.uniq
+  end #}}}
+  def self.dir(d) #{{{
+    "#{d.year}#{d.month < 10 ? "0#{d.month}" : d.month}"
+  end   #}}}
+
+  def self.list(proj=nil,prefix='',details=false) #{{{
+    impo = []
+    norm = []
+    mprolen = 4
+    mdonlen = 3
+    mfillen = 2
+
+    Dir.glob(prefix + '*') do |fil|
+      if !File.directory?(fil) && File.basename(fil) =~ /^\d+$/ 
+        tdi = YAML.load_file(fil)
+
+        don = tdi.done.nil? ? '' : tdi.done.strftime($opts['TFOR'])
+
+        mprolen = tdi.project.to_s.length if tdi.project.to_s.length > mprolen
+        mdonlen = don.length if don.length > mdonlen
+        mfillen = fil.to_s.length if fil.to_s.length > mfillen
+
+        str = []
+        str << fil.to_i
+        str << ''
+        str << fil
+        str << (tdi.priority ? '!' : ' ')
+        str << tdi.project.to_s
+        str << don
+        str << tdi.description.to_s
+        str << []
+        tdi.work.each do |wi|
+          str.last << "| #{wi}"
+        end
+        add = true
+        add = false if !proj.nil? && proj != tdi.project
+        if tdi.priority
+          str[1] = eval($opts['ICOL'])
+          impo << str if add
+        else  
+          norm << str if add
+        end
+      end
+    end
+
+    base = 'ID'.rjust(mfillen) + ' ! ' + 'Proj'.ljust(mprolen) + ' ' + 'Due'.ljust(mdonlen) + ' Description'
+    puts eval($opts['OCOL']) + base + (' ' * (COLS - base.length)) + reset
+    puts eval($opts['OCOL']) +        ('-' * COLS)                 + reset
+    (norm.sort{|a,b|[a[4],a[0]]<=>[b[4],b[0]]} + impo.sort{|a,b|[a[4],a[0]]<=>[b[4],b[0]]}).each_with_index do |e,i|
+      base = if e[2].length > 6
+        e[2].ljust(mfillen) + ' ' + e[3] + ' ' + e[4].ljust(mprolen) + ' ' + e[5].ljust(mdonlen) + ' ' + e[6]
+      else  
+        e[2].rjust(mfillen) + ' ' + e[3] + ' ' + e[4].ljust(mprolen) + ' ' + e[5].ljust(mdonlen) + ' ' + e[6]
+      end
+      print eval($opts['OCOL']) if i%2 == 1
+      puts e[1] + base + (' ' * (COLS - base.length)) + reset
+
+      if details
+        e[7].each do |f|
+          base = (' ' * (mfillen + mprolen + mdonlen + 5)) + f
+          print eval($opts['OCOL']) if i%2 == 1
+          puts e[1] + base + (' ' * (COLS - base.length)) + reset
+        end
+      end  
+    end
+  end #}}}
+
+  def self.add(proj,rest,due=nil) #{{{
+    pri  = rest.delete("!") ? true : false
+    desc = rest.join(' ')
+    id   = 1
+    id  += 1 while File.exists?(id.to_s)
+    unless due.nil?
+      begin
+        d = Chronic.parse(due)
+        d = Time.parse(due) if d.nil?
+        due = d
+      rescue
+        due = nil
+      end
+    end  
+    File.open(id.to_s,'w') { |f| f.write Todo::TodoItem.new(id,desc,pri,proj,[],due).to_yaml }
+    id
+  end #}}}
+
+   def self.done(nr,date) #{{{
+    begin
+      d = Chronic.parse(date)
+      d = Time.parse(date) if d.nil?
+    rescue
+    end
+    if !d.nil?
+      nr.each do |f|
+        if File.exists?(f)
+          tdi = YAML.load_file(f) 
+          tdi.done = d
+          Dir.mkdir("#{Todo.dir(d)}") unless File.exists?("#{Todo.dir(d)}")
+          id   = 1
+          id  += 1 while File.exists?("#{Todo.dir(d)}/#{id.to_s}")
+          File.unlink(tdi.id.to_s)
+          tdi.id = id
+          File.open("#{Todo.dir(d)}/#{id.to_s}",'w') { |f| f.write tdi.to_yaml }
+        end  
+      end  
+    end  
+  end #}}}
+
+   def self.due(nr,date) #{{{
+    begin
+      d = Chronic.parse(date)
+      d = Time.parse(date) if d.nil?
+    rescue
+    end
+    if !d.nil?
+      nr.each do |f|
+        if File.exists?(f)
+          tdi = YAML.load_file(f) 
+          tdi.done = d
+          File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
+        end  
+      end  
+    end  
+  end #}}}
+
+ def self.undone(dir,nr) #{{{
+  nr.each do |f|
+    if File.exists?("#{dir}/#{f}")
+      tdi = YAML.load_file("#{dir}/#{f}") 
+      tdi.done = nil
+      File.unlink("#{dir}/#{f}")
+      id   = 1
+      id  += 1 while File.exists?(id.to_s)
+      tdi.id = id
+      File.open(id.to_s,'w') { |f| f.write tdi.to_yaml }
+    end  
+  end  
+end #}}}
+
+  def self.time_extract(text,date=Time.now.to_s) #{{{
+    text = text.join(' ')
+    text.gsub!(/\@\{([^\}]+)\}\s*/) do
+      date = $1
+      ''
+    end 
+    [date,text.split(' ')]
+  end #}}}
+end  
+
+if ARGV[0] == 'help' || ARGV[0] == '-h' || ARGV[0] == '--help' #{{{
+  puts 'Usage Examples:'
+  puts '  todo add ! Bla Bla              ... add "Bla Bla" to todo list and mark it as important'
+  puts '  todo Adventure add Bla Bla      ... add "Bla Bla" to project "Adventure"'
+  puts '  todo log Bla Bla @{3 hours ago} ... add "Bla Bla" to list of done items (3 hours ago)'
+  puts '  todo log Bla Bla                ... add "Bla Bla" to list of done items (right now)'
+  puts
+  puts '  todo                            ... show active todos '
+  puts '  todo list                       ... show active todos'
+  puts '  todo done                       ... show done todos from last month'
+  puts '  todo done 10                    ... show done todos from last 10 months'
+  puts '  todo Adventure list             ... show active todos from project "Adventure"'
+  puts
+  puts '  todo 1 !                        ... modify todo 1 as important'
+  puts '  todo 1..3 !                     ... modify todo 1,2,3 as important'
+  puts '  todo 1 add 10 min Bla Bla       ... add a working time of 10 min and a comment to todo 1'
+  puts '  todo 1 edit                     ... edit todo 1 in your favourite editor'
+  puts '  todo 1 edit bla bla bla         ... modify description of todo 1'
+  puts '  todo 1,3-5 del                  ... delete todos 1,3,4,5'
+  puts '  todo 1 project                  ... remove project dependency from todo 1'
+  puts '  todo 1-3 project Bla            ... change project dependency for todos 1,2,3'
+  puts
+  puts '  todo 1 done                     ... mark todo 1 as done right now'
+  puts '  todo 1 done 2 hours ago         ... mark todo 1 as done 2 hours ago'
+  puts '  todo 1 done in 2 hours          ... mark todo 1 as done in 2 hours'
+  puts '  todo 1 done 3 days ago          ... mark todo 1 as done 3 days ago'
+  puts '  todo 1 done 01.12.2011          ... mark todo 1 as done on a particular day'
+  puts '  todo 200701/17 undone           ... mark todo 17 from a particular month as undone'
+  puts '  todo 200701 17-20 undone        ... mark todo 17,18,19,20 from a particular month as undone'
+  puts
+  puts '  todo help                       ... show this help'
+  puts
+  puts 'Current Settings (* change in ~/.todorc):'
+  puts "  WINDOW WIDTH     : #{COLS}"
+  puts "  EDITOR           : #{EDITOR}"
+  puts "  * PATH           : #{$opts['PATH']}"
+  puts "  * IMPORTANT COLOR: #{$opts['ICOL']} (check rubygem term/ansicolor for more colors)"
+  puts "  * ODD LINE COLOR : #{$opts['OCOL']} (check rubygem term/ansicolor for more colors)"
+  exit
+end #}}}
+
+if ARGV.length > 0
+  nr = Todo.number_range_parse(ARGV[0])
+  if    ARGV.length == 1 && ARGV[0] == 'list'    #{{{
+    Todo.list
+ #}}}
+  elsif ARGV.length == 2 && ARGV[0] == 'list'    #{{{
+    Todo.list(ARGV[1])
+ #}}}
+  elsif ARGV.length == 1 && ARGV[0] == 'details' #{{{
+    Todo.list(nil,'',true)
+ #}}}
+  elsif ARGV.length == 2 && ARGV[0] == 'details' #{{{
+    Todo.list(ARGV[1],'',true)
+ #}}}
+  elsif ARGV.length <= 3 && ARGV[0] == 'done'    #{{{
+    if ARGV[1] =~ /^\d+$/
+      lastmonths = ARGV[1].to_i
+      proj = ARGV[2]
+    elsif ARGV[2] =~ /^\d+$/
+      lastmonths = ARGV[2].to_i
+      proj = ARGV[1]
+    elsif ARGV.length == 2
+      lastmonths = 0
+      proj = ARGV[1]
+    else
+      lastmonths = 0
+      proj = nil
+    end  
+    lastmonths.downto(0) do |m|
+      d = Chronic.parse("#{m} months ago")
+      Todo.list(proj,Todo.dir(d) + "/",true)
+    end
+ #}}}
+  elsif ARGV.length >= 2 && ARGV[1] == 'add'     && nr.length == 0 #{{{
+    due, text = Todo.time_extract(ARGV[2..-1],nil)
+    id = Todo.add(ARGV[0],text,due)
+    puts "Todo #{id}"
+ #}}}
+  elsif ARGV.length >  1 && ARGV[0] == 'add'     #{{{
+    due, text = Todo.time_extract(ARGV[1..-1],nil)
+    id = Todo.add(nil,text,due)
+    puts "Todo #{id}"
+ #}}}
+  elsif ARGV.length >= 2 && ARGV[1] == 'log'     && nr.length == 0 #{{{
+    done, text = Todo.time_extract(ARGV[2..-1])
+    id = Todo.add(ARGV[0],text)
+    Todo.done([id.to_s],done)
+ #}}}
+  elsif ARGV.length >  1 && ARGV[0] == 'log'     #{{{
+    done, text = Todo.time_extract(ARGV[1..-1])
+    id = Todo.add(nil,text)
+    Todo.done([id.to_s],done)
+ #}}}
+  elsif ARGV.length >= 2 && ARGV[1] == 'add'     && nr.length == 1 #{{{
+    nr.each do |f|
+      if File.exists?(f)
+        tdi = YAML.load_file(f) 
+        tdi.work << ARGV[2..-1].join(' ')
+        File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
+      end  
+    end  
+ #}}}
+  elsif ARGV.length == 2 && ARGV[1] == '!'       && nr.length >  0 #{{{
+    nr.each do |f|
+      if File.exists?(f)
+        tdi = YAML.load_file(f) 
+        tdi.priority = !tdi.priority
+        File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
+      end  
+    end  
+ #}}}
+  elsif ARGV.length == 2 && ARGV[1] == 'edit'    && nr.length == 1 #{{{
+    system("vim #{ARGV[0]}")
+ #}}}
+  elsif ARGV.length >  2 && ARGV[1] == 'edit'    && nr.length == 1 #{{{
+    nr.each do |f|
+      if File.exists?(f)
+        tdi = YAML.load_file(f) 
+        tdi.description = ARGV[2..-1].join(' ')
+        File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
+      end  
+    end  
+ #}}}
+  elsif ARGV.length == 2 && ARGV[1] == 'done'    && nr.length >  0  #{{{
+    Todo.done(nr,Time.now.to_s)
+ #}}}
+  elsif ARGV.length >= 3 && ARGV[1] == 'done'    && nr.length >  0  #{{{
+    Todo.done(nr,ARGV[2..-1].join(' '))
+ #}}}
+  elsif ARGV.length == 2 && ARGV[1] == 'due'     && nr.length >  0  #{{{
+    Todo.done(nr,Time.now.to_s)
+ #}}}
+  elsif ARGV.length >= 3 && ARGV[1] == 'due'     && nr.length >  0  #{{{
+    Todo.due(nr,ARGV[2..-1].join(' '))
+ #}}}
+  elsif ARGV.length == 3 && ARGV[2] == 'undone'  && nr.length == 1 #{{{
+    Todo.undone(nr[0],Todo.number_range_parse(ARGV[1]))
+ #}}}
+  elsif ARGV.length == 2 && ARGV[1] == 'undone'  #{{{
+    x = ARGV[0].split("/")
+    if x.length == 2
+      a = Todo.number_range_parse(x[0])
+      b = Todo.number_range_parse(x[1])
+      if a.length == 1 && b.length >= 1
+        Todo.undone(a[0],b)
+      end
+    end
+ #}}}
+  elsif ARGV.length == 2 && ARGV[1] == 'del'     && nr.length >  0 #{{{
+    nr.each do |f|
+      File.unlink(f) if File.exists?(f)
+    end  
+ #}}}
+  elsif ARGV.length == 2 && ARGV[1] == 'project' && nr.length >  0  #{{{
+    nr.each do |f|
+      if File.exists?(f)
+        tdi = YAML.load_file(f) 
+        tdi.project = nil
+        File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
+      end  
+    end  
+ #}}}
+  elsif ARGV.length == 3 && ARGV[1] == 'project' && nr.length >  0  #{{{
+    nr.each do |f|
+      if File.exists?(f)
+        tdi = YAML.load_file(f) 
+        tdi.project = ARGV[2]
+        File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
+      end  
+    end  
+ #}}}
+    else
+      puts 'Na. Try "todo help".'
+  end
+else
+  Todo.list
+end
