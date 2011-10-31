@@ -21,12 +21,12 @@ else
   '/etc/alternatives/editor'
 end #}}}
 
-### ~/.todorc #{{{
+### ~/.todorc #{{{ 
 $opts = {}
 $opts['PATH'] = '~/.todos'
 $opts['ICOL'] = 'red'
 $opts['OCOL'] = 'on_white'
-$opts['TFOR'] = '%m.%y,%H:%M'
+$opts['TFOR'] = '%d.%m,%H:%M'
 
 if File.exists?(File.expand_path('~/.todorc'))
   $opts = YAML.load_file(File.expand_path('~/.todorc'))
@@ -90,12 +90,17 @@ end #}}}
     "#{d.year}#{d.month < 10 ? "0#{d.month}" : d.month}"
   end   #}}}
 
-  def self.list(proj=nil,prefix='',details=false) #{{{
+  def self.list(proj=nil,prefix='',details=false,colored=true) #{{{
     impo = []
     norm = []
     mprolen = 4
     mdonlen = 3
     mfillen = 2
+
+    if !colored
+      $opts['ICOL'] = "''"
+      $opts['OCOL'] = "''"
+    end
 
     Dir.glob(prefix + '*') do |fil|
       if !File.directory?(fil) && File.basename(fil) =~ /^\d+$/ 
@@ -278,6 +283,9 @@ if ARGV.length > 0
   nr = Todo.number_range_parse(ARGV[0])
   if    ARGV.length == 1 && ARGV[0] == 'list'    #{{{
     Todo.list
+ #}}}
+  elsif ARGV.length == 1 && ARGV[0] == 'plain'   #{{{
+    Todo.list(nil,'',false,false)
  #}}}
   elsif ARGV.length == 2 && ARGV[0] == 'list'    #{{{
     Todo.list(ARGV[1])
