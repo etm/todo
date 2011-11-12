@@ -136,22 +136,35 @@ end #}}}
     end
 
     base = 'ID'.rjust(mfillen) + ' ! ' + 'Proj'.ljust(mprolen) + ' ' + 'Due'.ljust(mdonlen) + ' Description'
-    puts eval($opts['OCOL']) + base + (' ' * (COLS - base.length)) + reset
-    puts eval($opts['OCOL']) +        ('-' * COLS)                 + reset
+
+    print eval($opts['OCOL']) + base + (' ' * (COLS - base.length))
+    puts (colored ? reset : '')
+    print eval($opts['OCOL']) +        ('-' * COLS)                
+    puts (colored ? reset : '')
+
     (norm.sort{|a,b|[a[4],a[0]]<=>[b[4],b[0]]} + impo.sort{|a,b|[a[4],a[0]]<=>[b[4],b[0]]}).each_with_index do |e,i|
       base = if e[2].length > 6
         e[2].ljust(mfillen) + ' ' + e[3] + ' ' + e[4].ljust(mprolen) + ' ' + e[5].ljust(mdonlen) + ' ' + e[6]
       else  
         e[2].rjust(mfillen) + ' ' + e[3] + ' ' + e[4].ljust(mprolen) + ' ' + e[5].ljust(mdonlen) + ' ' + e[6]
       end
+      coll = COLS - base.length
+      coll = 0 if coll < 0
+
       print eval($opts['OCOL']) if i%2 == 1
-      puts e[1] + base + (' ' * (COLS - base.length)) + reset
+      line = e[1] + base + (' ' * coll)
+      line = line.scan(/./mu)[0...COLS].join
+      print line
+      puts (colored ? reset : '')
 
       if details
         e[7].each do |f|
           base = (' ' * (mfillen + mprolen + mdonlen + 5)) + f
           print eval($opts['OCOL']) if i%2 == 1
-          puts e[1] + base + (' ' * (COLS - base.length)) + reset
+          line = e[1] + base + (' ' * coll)
+          line = line.scan(/./mu)[0...COLS].join
+          print line
+          puts (colored ? reset : '')
         end
       end  
     end
@@ -240,35 +253,40 @@ end
 
 if ARGV[0] == 'help' || ARGV[0] == '-h' || ARGV[0] == '--help' #{{{
   puts 'Usage Examples:'
-  puts '  todo add ! Bla Bla              ... add "Bla Bla" to todo list and mark it as important'
-  puts '  todo Adventure add Bla Bla      ... add "Bla Bla" to project "Adventure"'
-  puts '  todo log Bla Bla @{3 hours ago} ... add "Bla Bla" to list of done items (3 hours ago)'
-  puts '  todo log Bla Bla                ... add "Bla Bla" to list of done items (right now)'
+  puts '  todo add ! Bla Bla                     ... add "Bla Bla" to todo list and mark it as important'
+  puts '  todo Adventure add Bla Bla             ... add "Bla Bla" to project "Adventure"'
+  puts '  todo log Bla Bla, 3 hours ago          ... add "Bla Bla" to list of done items (3 hours ago)'
+  puts '  todo log Bla Bla                       ... add "Bla Bla" to list of done items (right now)'
   puts
-  puts '  todo                            ... show active todos '
-  puts '  todo list                       ... show active todos'
-  puts '  todo done                       ... show done todos from last month'
-  puts '  todo done 10                    ... show done todos from last 10 months'
-  puts '  todo Adventure list             ... show active todos from project "Adventure"'
+  puts '  todo                                   ... show active todos '
+  puts '  todo list                              ... show active todos'
+  puts '  todo plain                             ... show without terminal color'
+  puts '  todo done                              ... show done todos from last month'
+  puts '  todo done 10                           ... show done todos from last 10 months'
+  puts '  todo Adventure list                    ... show active todos from project "Adventure"'
   puts
-  puts '  todo 1 !                        ... modify todo 1 as important'
-  puts '  todo 1..3 !                     ... modify todo 1,2,3 as important'
-  puts '  todo 1 add 10 min Bla Bla       ... add a working time of 10 min and a comment to todo 1'
-  puts '  todo 1 edit                     ... edit todo 1 in your favourite editor'
-  puts '  todo 1 edit bla bla bla         ... modify description of todo 1'
-  puts '  todo 1,3-5 del                  ... delete todos 1,3,4,5'
-  puts '  todo 1 project                  ... remove project dependency from todo 1'
-  puts '  todo 1-3 project Bla            ... change project dependency for todos 1,2,3'
+  puts '  todo 1 !                               ... modify todo 1 as important'
+  puts '  todo 1..3 !                            ... modify todo 1,2,3 as important'
+  puts '  todo 1 add 10 min, Bla Bla             ... add a working time of 10 min and a comment to todo 1'
+  puts '  todo 1 add 10 min, today, Bla Bla      ... add a working time of 10 min and a comment to todo 1'
+  puts '  todo 1 add today, 10 min, Bla Bla      ... add a working time of 10 min and a comment to todo 1'
+  puts '  todo 1 add 22.01.2012, 10 min, Bla Bla ... add a working time of 10 min and a comment to todo 1'
+  puts '  todo 1 edit                            ... edit todo 1 in your favourite editor'
+  puts '  todo 1 edit bla bla bla                ... modify description of todo 1'
+  puts '  todo 1,3-5 del                         ... delete todos 1,3,4,5'
+  puts '  todo 1 project                         ... remove project dependency from todo 1'
+  puts '  todo 1 due tomorrow                    ... remove project dependency from todo 1'
+  puts '  todo 1-3 project Bla                   ... change project dependency for todos 1,2,3'
   puts
-  puts '  todo 1 done                     ... mark todo 1 as done right now'
-  puts '  todo 1 done 2 hours ago         ... mark todo 1 as done 2 hours ago'
-  puts '  todo 1 done in 2 hours          ... mark todo 1 as done in 2 hours'
-  puts '  todo 1 done 3 days ago          ... mark todo 1 as done 3 days ago'
-  puts '  todo 1 done 01.12.2011          ... mark todo 1 as done on a particular day'
-  puts '  todo 200701/17 undone           ... mark todo 17 from a particular month as undone'
-  puts '  todo 200701 17-20 undone        ... mark todo 17,18,19,20 from a particular month as undone'
+  puts '  todo 1 done                            ... mark todo 1 as done right now'
+  puts '  todo 1 done 2 hours ago                ... mark todo 1 as done 2 hours ago'
+  puts '  todo 1 done in 2 hours                 ... mark todo 1 as done in 2 hours'
+  puts '  todo 1 done 3 days ago                 ... mark todo 1 as done 3 days ago'
+  puts '  todo 1 done 01.12.2011                 ... mark todo 1 as done on a particular day'
+  puts '  todo 200701/17 undone                  ... mark todo 17 from a particular month as undone'
+  puts '  todo 200701 17-20 undone               ... mark todo 17,18,19,20 from a particular month as undone'
   puts
-  puts '  todo help                       ... show this help'
+  puts '  todo help                              ... show this help'
   puts
   puts 'Current Settings (* change in ~/.todorc):'
   puts "  WINDOW WIDTH     : #{COLS}"
