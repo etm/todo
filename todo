@@ -13,7 +13,11 @@ COLS   = begin #{{{
   require 'io/console'
   IO.console.winsize[1]
 rescue LoadError
-  Integer(`tput cols`)
+  begin
+    Integer(`/usr/bin/tput cols`)
+  rescue
+    80
+  end
 end #}}}
 EDITOR = if ENV['EDITOR'] #{{{
   ENV['EDITOR']
@@ -152,8 +156,9 @@ end #}}}
       coll = 0 if coll < 0
 
       print eval($opts['OCOL']) if i%2 == 1
-      line = e[1] + base + (' ' * coll)
+      line = base + (' ' * coll)
       line = line.scan(/./mu)[0...COLS].join
+      line = e[1] + line
       print line
       puts (colored ? reset : '')
 
