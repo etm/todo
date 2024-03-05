@@ -36,14 +36,14 @@ $opts['OCOL'] = 'on_yellow'
 $opts['HCOL'] = 'on_cyan'
 $opts['TFOR'] = '%d.%m,%H:%M'
 
-if File.exists?(File.expand_path('~/.todorc'))
+if File.exist?(File.expand_path('~/.todorc'))
   $opts = YAML.load_file(File.expand_path('~/.todorc'))
 else
   File.open(File.expand_path('~/.todorc'),'w') { |f| f.write $opts.to_yaml }
 end #}}}
 
 ### chdir to path #{{{
-unless File.exists?(File.expand_path($opts['PATH']))
+unless File.exist?(File.expand_path($opts['PATH']))
   Dir.mkdir(File.expand_path($opts['PATH']))
 end
 Dir.chdir(File.expand_path($opts['PATH'])) #}}}
@@ -183,7 +183,7 @@ end #}}}
     pri  = rest.delete("!") ? true : false
     desc = rest.join(' ')
     id   = 1
-    id  += 1 while File.exists?(id.to_s)
+    id  += 1 while File.exist?(id.to_s)
     unless due.nil?
       begin
         d = Chronic.parse(due)
@@ -205,12 +205,12 @@ end #}}}
     end
     if !d.nil?
       nr.each do |f|
-        if File.exists?(f)
+        if File.exist?(f)
           tdi = YAML.load_file(f,permitted_classes: [Todo::TodoItem,Time])
           tdi.done = d
-          Dir.mkdir("#{Todo.dir(d)}") unless File.exists?("#{Todo.dir(d)}")
+          Dir.mkdir("#{Todo.dir(d)}") unless File.exist?("#{Todo.dir(d)}")
           id   = 1
-          id  += 1 while File.exists?("#{Todo.dir(d)}/#{id.to_s}")
+          id  += 1 while File.exist?("#{Todo.dir(d)}/#{id.to_s}")
           File.unlink(tdi.id.to_s)
           tdi.id = id
           File.open("#{Todo.dir(d)}/#{id.to_s}",'w') { |f| f.write tdi.to_yaml }
@@ -227,7 +227,7 @@ end #}}}
     end
     if !d.nil?
       nr.each do |f|
-        if File.exists?(f)
+        if File.exist?(f)
           tdi = YAML.load_file(f,permitted_classes: [Todo::TodoItem,Time])
           tdi.done = d
           File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
@@ -238,12 +238,12 @@ end #}}}
 
  def self.undone(dir,nr) #{{{
   nr.each do |f|
-    if File.exists?("#{dir}/#{f}")
+    if File.exist?("#{dir}/#{f}")
       tdi = YAML.load_file("#{dir}/#{f}",permitted_classes: [Todo::TodoItem,Time])
       tdi.done = nil
       File.unlink("#{dir}/#{f}")
       id   = 1
-      id  += 1 while File.exists?(id.to_s)
+      id  += 1 while File.exist?(id.to_s)
       tdi.id = id
       File.open(id.to_s,'w') { |f| f.write tdi.to_yaml }
     end
@@ -267,7 +267,7 @@ if ARGV[0] == 'help' || ARGV[0] == '-h' || ARGV[0] == '--help' #{{{
   puts '  todo log Bla Bla, 3 hours ago          ... add "Bla Bla" to list of done items (3 hours ago)'
   puts '  todo log Bla Bla                       ... add "Bla Bla" to list of done items (right now)'
   puts
-  puts '  todo                                   ... show active todos '
+  puts '  todo                                   ... show active todos'
   puts '  todo list                              ... show active todos'
   puts '  todo plain                             ... show without terminal color'
   puts '  todo done                              ... show done todos from last month'
@@ -292,7 +292,7 @@ if ARGV[0] == 'help' || ARGV[0] == '-h' || ARGV[0] == '--help' #{{{
   puts '  todo 1 done in 2 hours                 ... mark todo 1 as done in 2 hours'
   puts '  todo 1 done 3 days ago                 ... mark todo 1 as done 3 days ago'
   puts '  todo 1 done 01.12.2011                 ... mark todo 1 as done on a particular day'
-  puts '  todo revice 200701/17                  ... mark todo 17 from a particular month as active'
+  puts '  todo revive 200701/17                  ... mark todo 17 from a particular month as active'
   puts '  todo revive 200701 17-20               ... mark todo 17,18,19,20 from a particular month as active'
   puts
   puts '  todo help                              ... show this help'
@@ -365,7 +365,7 @@ if ARGV.length > 0
  #}}}
   elsif ARGV.length >= 2 && ARGV[1] == 'add'     && nr.length == 1 #{{{
     nr.each do |f|
-      if File.exists?(f)
+      if File.exist?(f)
         tdi = YAML.load_file(f,permitted_classes: [Todo::TodoItem,Time])
         tdi.work << ARGV[2..-1].join(' ')
         File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
@@ -374,7 +374,7 @@ if ARGV.length > 0
  #}}}
   elsif ARGV.length == 2 && ARGV[1] == '!'       && nr.length >  0 #{{{
     nr.each do |f|
-      if File.exists?(f)
+      if File.exist?(f)
         tdi = YAML.load_file(f,permitted_classes: [Todo::TodoItem,Time])
         tdi.priority = !tdi.priority
         File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
@@ -386,7 +386,7 @@ if ARGV.length > 0
  #}}}
   elsif ARGV.length >  2 && ARGV[1] == 'edit'    && nr.length == 1 #{{{
     nr.each do |f|
-      if File.exists?(f)
+      if File.exist?(f)
         tdi = YAML.load_file(f,permitted_classes: [Todo::TodoItem,Time])
         tdi.description = ARGV[2..-1].join(' ')
         File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
@@ -420,12 +420,12 @@ if ARGV.length > 0
  #}}}
   elsif ARGV.length == 2 && ARGV[1] == 'del'     && nr.length >  0 #{{{
     nr.each do |f|
-      File.unlink(f) if File.exists?(f)
+      File.unlink(f) if File.exist?(f)
     end
  #}}}
   elsif ARGV.length == 2 && ARGV[1] == 'project' && nr.length >  0  #{{{
     nr.each do |f|
-      if File.exists?(f)
+      if File.exist?(f)
         tdi = YAML.load_file(f,permitted_classes: [Todo::TodoItem,Time])
         tdi.project = nil
         File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
@@ -434,7 +434,7 @@ if ARGV.length > 0
  #}}}
   elsif ARGV.length == 3 && ARGV[1] == 'project' && nr.length >  0  #{{{
     nr.each do |f|
-      if File.exists?(f)
+      if File.exist?(f)
         tdi = YAML.load_file(f,permitted_classes: [Todo::TodoItem,Time])
         tdi.project = ARGV[2]
         File.open(tdi.id.to_s,'w') { |f| f.write tdi.to_yaml }
