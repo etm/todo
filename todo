@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 # All code in this package is provided under the LGPL license.
-# Please read the file COPYING.
+# Please read the file LICENSE.
 require 'yaml'
 require 'rubygems'
 require 'chronic'
